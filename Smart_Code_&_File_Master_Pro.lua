@@ -1,6 +1,6 @@
 -- Extension Name: Smart Code & File Master Pro
 -- Creator: Mohammad Usman
--- Version: 7.0 (Final Verified Edition)
+-- Version: 8.0 (Final Verified Fixed-Bottom Edition)
 -- Compatibility: Android 8.0 to Android 16+ (Jieshuo Screen Reader)
 
 require "import"
@@ -76,7 +76,7 @@ local function playCompletionTone(isSuccess)
   end)
 end
 
--- Function: English Voice Guidance + Toast + Completion Tone
+-- Function: Voice Guidance + Toast + Completion Tone
 local function notifyUser(msg, isSuccess)
   service.speak(msg)
   Toast.makeText(service, msg, Toast.LENGTH_SHORT).show()
@@ -337,7 +337,7 @@ local function extractZipArchive(zipFilePath, outputFolderPath)
 end
 
 -- =========================================================================
--- 3. PHONE STORAGE BROWSER (2 Bottom Button Rows + Folder Popup + Multi-Check)
+-- 3. PHONE STORAGE BROWSER (Fixed Bottom Buttons + Multi-Select + Folder Popup)
 -- =========================================================================
 local function openFileBrowser(startFolder)
   local currentPath = startFolder or rootStorage
@@ -351,7 +351,7 @@ local function openFileBrowser(startFolder)
   local browserLayout = {
     LinearLayout,
     orientation = "vertical",
-    padding = "16dp",
+    padding = "14dp",
     layout_width = "fill",
     layout_height = "fill",
     {
@@ -359,78 +359,90 @@ local function openFileBrowser(startFolder)
       id = "txtCurrentPath",
       text = "Folder: " .. currentPath,
       textSize = "13sp",
-      layout_marginBottom = "8dp",
+      padding = "4dp",
+      layout_width = "fill",
     },
-    -- Full Height ListView (Takes all available top space regardless of item count)
+    -- Middle ListView (Expands with layout_weight=1, keeping buttons fixed at bottom)
     {
       ListView,
       id = "browserListView",
       layout_width = "fill",
-      layout_height = "300dp",
+      layout_height = "0dp",
       layout_weight = 1,
-      layout_marginBottom = "10dp",
     },
-    -- Bottom Row 1 (4 Buttons: View Text | Compress | Extract | Rename)
+    -- Fixed Bottom Bar Container
     {
       LinearLayout,
-      orientation = "horizontal",
+      orientation = "vertical",
       layout_width = "fill",
-      layout_marginBottom = "6dp",
+      padding = "4dp",
+      -- Bottom Row 1 (4 Fixed Buttons: View Text | Compress | Extract | Rename)
       {
-        Button,
-        id = "btnViewText",
-        text = "View Text",
-        layout_weight = 1,
-        textSize = "13sp",
+        LinearLayout,
+        orientation = "horizontal",
+        layout_width = "fill",
+        {
+          Button,
+          id = "btnViewText",
+          text = "View Text",
+          layout_width = "0dp",
+          layout_weight = 1,
+          textSize = "12sp",
+        },
+        {
+          Button,
+          id = "btnCompress",
+          text = "Compress",
+          layout_width = "0dp",
+          layout_weight = 1,
+          textSize = "12sp",
+        },
+        {
+          Button,
+          id = "btnExtract",
+          text = "Extract",
+          layout_width = "0dp",
+          layout_weight = 1,
+          textSize = "12sp",
+        },
+        {
+          Button,
+          id = "btnRename",
+          text = "Rename",
+          layout_width = "0dp",
+          layout_weight = 1,
+          textSize = "12sp",
+        },
       },
+      -- Bottom Row 2 (3 Fixed Buttons: Delete | Parent Folder | Go Back)
       {
-        Button,
-        id = "btnCompress",
-        text = "Compress",
-        layout_weight = 1,
-        textSize = "13sp",
-      },
-      {
-        Button,
-        id = "btnExtract",
-        text = "Extract",
-        layout_weight = 1,
-        textSize = "13sp",
-      },
-      {
-        Button,
-        id = "btnRename",
-        text = "Rename",
-        layout_weight = 1,
-        textSize = "13sp",
-      },
-    },
-    -- Bottom Row 2 (3 Buttons: Delete | Parent Folder | Go Back)
-    {
-      LinearLayout,
-      orientation = "horizontal",
-      layout_width = "fill",
-      layout_marginBottom = "18dp",
-      {
-        Button,
-        id = "btnDelete",
-        text = "Delete",
-        layout_weight = 1,
-        textSize = "14sp",
-      },
-      {
-        Button,
-        id = "btnParentFolder",
-        text = "Parent Folder",
-        layout_weight = 1,
-        textSize = "14sp",
-      },
-      {
-        Button,
-        id = "btnBrowserBack",
-        text = "Go Back",
-        layout_weight = 1,
-        textSize = "14sp",
+        LinearLayout,
+        orientation = "horizontal",
+        layout_width = "fill",
+        {
+          Button,
+          id = "btnDelete",
+          text = "Delete",
+          layout_width = "0dp",
+          layout_weight = 1,
+          textSize = "13sp",
+        },
+        {
+          Button,
+          id = "btnParentFolder",
+          text = "Parent Folder",
+          layout_width = "0dp",
+          layout_weight = 1,
+          textSize = "13sp",
+        },
+        {
+          Button,
+          id = "btnBrowserBack",
+          text = "Go Back",
+          layout_width = "0dp",
+          layout_weight = 1,
+          textSize = "13sp",
+        },
       },
     },
   }
@@ -511,7 +523,7 @@ local function openFileBrowser(startFolder)
   
   -- Item Click Logic:
   -- 1. If Folder clicked -> Show Popup ("View Folder" | "Select")
-  -- 2. If File clicked -> Toggle Check/Select directly for single or multiple selection
+  -- 2. If File clicked -> Toggle Check/Select directly
   bViews.browserListView.onItemClick = function(parent, view, position, id)
     local idx = position + 1
     local item = itemEntries[idx]
@@ -527,11 +539,13 @@ local function openFileBrowser(startFolder)
         LinearLayout,
         orientation = "vertical",
         padding = "20dp",
+        layout_width = "fill",
         {
           TextView,
           text = "Choose action for folder: " .. item.name,
           textSize = "15sp",
-          layout_marginBottom = "16dp",
+          padding = "6dp",
+          layout_width = "fill",
         },
         {
           LinearLayout,
@@ -541,12 +555,14 @@ local function openFileBrowser(startFolder)
             Button,
             id = "btnPopViewFolder",
             text = "View Folder",
+            layout_width = "0dp",
             layout_weight = 1,
           },
           {
             Button,
             id = "btnPopSelectFolder",
             text = isCurrentlySelected and "Unselect" or "Select",
+            layout_width = "0dp",
             layout_weight = 1,
           },
         }
@@ -572,7 +588,6 @@ local function openFileBrowser(startFolder)
       
       folderPop.show()
     else
-      -- File Clicked: Toggle Check/Select directly
       checkedMap[idx] = not checkedMap[idx]
       updateListAdapter()
       if checkedMap[idx] then
@@ -635,11 +650,13 @@ local function openFileBrowser(startFolder)
       LinearLayout,
       orientation = "vertical",
       padding = "20dp",
+      layout_width = "fill",
       {
         TextView,
         text = "Selected Items: " .. #selected .. "\nEnter Zip File Name:",
         textSize = "15sp",
-        layout_marginBottom = "10dp",
+        padding = "4dp",
+        layout_width = "fill",
       },
       {
         EditText,
@@ -647,22 +664,24 @@ local function openFileBrowser(startFolder)
         text = defaultZipName,
         hint = "Enter Zip Name",
         layout_width = "fill",
-        layout_marginBottom = "15dp",
       },
       {
         LinearLayout,
         orientation = "horizontal",
         layout_width = "fill",
+        padding = "4dp",
         {
           Button,
           id = "btnConfirmZip",
           text = "Create Zip",
+          layout_width = "0dp",
           layout_weight = 1,
         },
         {
           Button,
           id = "btnCancelZip",
           text = "Cancel",
+          layout_width = "0dp",
           layout_weight = 1,
         },
       }
@@ -759,11 +778,13 @@ local function openFileBrowser(startFolder)
       LinearLayout,
       orientation = "vertical",
       padding = "20dp",
+      layout_width = "fill",
       {
         TextView,
         text = "Current Name: " .. item.name,
         textSize = "15sp",
-        layout_marginBottom = "10dp",
+        padding = "4dp",
+        layout_width = "fill",
       },
       {
         EditText,
@@ -771,22 +792,24 @@ local function openFileBrowser(startFolder)
         text = item.name,
         hint = "Enter New Name",
         layout_width = "fill",
-        layout_marginBottom = "15dp",
       },
       {
         LinearLayout,
         orientation = "horizontal",
         layout_width = "fill",
+        padding = "4dp",
         {
           Button,
           id = "btnConfirmRename",
           text = "Save Name",
+          layout_width = "0dp",
           layout_weight = 1,
         },
         {
           Button,
           id = "btnCancelRename",
           text = "Cancel",
+          layout_width = "0dp",
           layout_weight = 1,
         },
       }
@@ -837,26 +860,31 @@ local function openFileBrowser(startFolder)
       LinearLayout,
       orientation = "vertical",
       padding = "20dp",
+      layout_width = "fill",
       {
         TextView,
         text = "Are you sure you want to delete " .. #selected .. " selected item(s)?",
         textSize = "16sp",
-        layout_marginBottom = "20dp",
+        padding = "6dp",
+        layout_width = "fill",
       },
       {
         LinearLayout,
         orientation = "horizontal",
         layout_width = "fill",
+        padding = "4dp",
         {
           Button,
           id = "btnConfirmDel",
           text = "Confirm Delete",
+          layout_width = "0dp",
           layout_weight = 1,
         },
         {
           Button,
           id = "btnCancelDel",
           text = "Cancel",
+          layout_width = "0dp",
           layout_weight = 1,
         },
       }
@@ -918,7 +946,7 @@ local function openFileBrowser(startFolder)
 end
 
 -- =========================================================================
--- 4. SMART CODE SPLITTER (Line-Safe Equal Division without Breaking Code)
+-- 4. SMART CODE SPLITTER (No setMargins Bug + Fixed Bottom Button)
 -- =========================================================================
 local function splitCodeIntoSafeParts(fullText, numParts)
   local lines = {}
@@ -965,56 +993,70 @@ local function openCodeSplitterWindow()
   local sViews = {}
   
   local splitLayout = {
-    ScrollView,
+    LinearLayout,
+    orientation = "vertical",
+    padding = "16dp",
     layout_width = "fill",
     layout_height = "fill",
-    fillViewport = true,
+    -- Fixed Top Controls
+    {
+      TextView,
+      text = string.format("Total Characters: %d | Words: %d | Lines: %d", totalChars, totalWords, totalLines),
+      textSize = "14sp",
+      padding = "4dp",
+      layout_width = "fill",
+    },
     {
       LinearLayout,
-      orientation = "vertical",
-      padding = "20dp",
+      orientation = "horizontal",
+      layout_width = "fill",
+      padding = "4dp",
       {
-        TextView,
-        text = string.format("Total Characters: %d | Words: %d | Lines: %d", totalChars, totalWords, totalLines),
-        textSize = "14sp",
-        layout_marginBottom = "12dp",
+        EditText,
+        id = "edtPartCount",
+        text = tostring(defaultParts),
+        hint = "Parts Count",
+        inputType = "number",
+        layout_width = "0dp",
+        layout_weight = 1,
       },
       {
-        LinearLayout,
-        orientation = "horizontal",
-        layout_width = "fill",
-        layout_marginBottom = "12dp",
-        {
-          EditText,
-          id = "edtPartCount",
-          text = tostring(defaultParts),
-          hint = "Parts Count",
-          inputType = "number",
-          layout_weight = 1,
-        },
-        {
-          Button,
-          id = "btnGenerateParts",
-          text = "Split Now",
-          layout_weight = 1,
-        },
+        Button,
+        id = "btnGenerateParts",
+        text = "Split Now",
+        layout_width = "0dp",
+        layout_weight = 1,
       },
+    },
+    -- Scrollable Middle Area for Split Parts
+    {
+      ScrollView,
+      layout_width = "fill",
+      layout_height = "0dp",
+      layout_weight = 1,
+      fillViewport = true,
       {
         LinearLayout,
         id = "partsContainer",
         orientation = "vertical",
         layout_width = "fill",
-        layout_marginBottom = "15dp",
+        padding = "4dp",
       },
+    },
+    -- Fixed Bottom Go Back Button
+    {
+      LinearLayout,
+      orientation = "vertical",
+      layout_width = "fill",
+      padding = "4dp",
       {
         Button,
         id = "btnSplitBack",
         text = "Go Back",
         layout_width = "fill",
-        layout_marginBottom = "25dp",
-        textSize = "16sp",
+        textSize = "15sp",
       },
-    }
+    },
   }
   
   splitDlg.setView(loadlayout(splitLayout, sViews))
@@ -1031,16 +1073,18 @@ local function openCodeSplitterWindow()
       charCursor = endChar + 2
       
       local itemViews = {}
+      -- Using padding instead of layout_marginBottom prevents ViewGroup$LayoutParams@setMargins crash!
       local partBoxLayout = {
         LinearLayout,
         orientation = "vertical",
         layout_width = "fill",
-        layout_marginBottom = "18dp",
+        padding = "8dp",
         {
           TextView,
           text = string.format("Part %d of %d | Characters: %d (%d to %d) | Lines: %d", idx, #partsList, pChars, startChar, math.max(startChar, endChar), pLines),
           textSize = "14sp",
-          layout_marginBottom = "6dp",
+          padding = "4dp",
+          layout_width = "fill",
         },
         {
           EditText,
@@ -1050,7 +1094,6 @@ local function openCodeSplitterWindow()
           layout_width = "fill",
           layout_height = "130dp",
           gravity = "top",
-          layout_marginBottom = "6dp",
         },
         {
           Button,
@@ -1092,7 +1135,7 @@ local function openCodeSplitterWindow()
 end
 
 -- =========================================================================
--- 5. SURGICAL LINE-BY-LINE EDITOR (Select, Replace, Delete, Find Line, Syntax Check)
+-- 5. SURGICAL LINE-BY-LINE EDITOR (Fixed Bottom Action Buttons)
 -- =========================================================================
 local function openLineEditorWindow()
   local fullCode = tostring(views.edtTextContent.Text)
@@ -1112,116 +1155,141 @@ local function openLineEditorWindow()
   local lViews = {}
   
   local lineEditorLayout = {
-    ScrollView,
+    LinearLayout,
+    orientation = "vertical",
+    padding = "16dp",
     layout_width = "fill",
     layout_height = "fill",
-    fillViewport = true,
+    -- Scrollable Top Editor Section
     {
-      LinearLayout,
-      orientation = "vertical",
-      padding = "20dp",
-      {
-        TextView,
-        id = "txtLineStatus",
-        text = "Total Lines: " .. #codeLines,
-        textSize = "14sp",
-        layout_marginBottom = "10dp",
-      },
+      ScrollView,
+      layout_width = "fill",
+      layout_height = "0dp",
+      layout_weight = 1,
+      fillViewport = true,
       {
         LinearLayout,
-        orientation = "horizontal",
+        orientation = "vertical",
         layout_width = "fill",
-        layout_marginBottom = "10dp",
+        padding = "4dp",
         {
-          EditText,
-          id = "edtSearchWord",
-          hint = "Find Word",
-          layout_weight = 1,
+          TextView,
+          id = "txtLineStatus",
+          text = "Total Lines: " .. #codeLines,
+          textSize = "14sp",
+          padding = "4dp",
+          layout_width = "fill",
+        },
+        {
+          LinearLayout,
+          orientation = "horizontal",
+          layout_width = "fill",
+          padding = "2dp",
+          {
+            EditText,
+            id = "edtSearchWord",
+            hint = "Find Word",
+            layout_width = "0dp",
+            layout_weight = 1,
+          },
+          {
+            Button,
+            id = "btnFindLine",
+            text = "Find Line",
+          },
+        },
+        {
+          LinearLayout,
+          orientation = "horizontal",
+          layout_width = "fill",
+          padding = "2dp",
+          {
+            EditText,
+            id = "edtStartLine",
+            hint = "Start Line",
+            inputType = "number",
+            layout_width = "0dp",
+            layout_weight = 1,
+          },
+          {
+            EditText,
+            id = "edtEndLine",
+            hint = "End Line",
+            inputType = "number",
+            layout_width = "0dp",
+            layout_weight = 1,
+          },
         },
         {
           Button,
-          id = "btnFindLine",
-          text = "Find Line",
+          id = "btnSelectLines",
+          text = "Select",
+          layout_width = "fill",
+          textSize = "14sp",
+        },
+        {
+          TextView,
+          id = "txtPreviewHeader",
+          text = "Selected Code:",
+          textSize = "14sp",
+          padding = "4dp",
+          layout_width = "fill",
+        },
+        {
+          EditText,
+          id = "edtSelectedLinesCode",
+          hint = "Selected Code",
+          layout_width = "fill",
+          layout_height = "150dp",
+          gravity = "top",
         },
       },
+    },
+    -- Fixed Bottom Action Buttons
+    {
+      LinearLayout,
+      orientation = "vertical",
+      layout_width = "fill",
+      padding = "4dp",
       {
         LinearLayout,
         orientation = "horizontal",
         layout_width = "fill",
-        layout_marginBottom = "10dp",
-        {
-          EditText,
-          id = "edtStartLine",
-          hint = "Start Line",
-          inputType = "number",
-          layout_weight = 1,
-        },
-        {
-          EditText,
-          id = "edtEndLine",
-          hint = "End Line",
-          inputType = "number",
-          layout_weight = 1,
-        },
-      },
-      {
-        Button,
-        id = "btnSelectLines",
-        text = "Select",
-        layout_width = "fill",
-        layout_marginBottom = "12dp",
-        textSize = "15sp",
-      },
-      {
-        TextView,
-        id = "txtPreviewHeader",
-        text = "Selected Code:",
-        textSize = "14sp",
-        layout_marginBottom = "5dp",
-      },
-      {
-        EditText,
-        id = "edtSelectedLinesCode",
-        hint = "Selected Code",
-        layout_width = "fill",
-        layout_height = "160dp",
-        gravity = "top",
-        layout_marginBottom = "12dp",
-      },
-      {
-        LinearLayout,
-        orientation = "horizontal",
-        layout_width = "fill",
-        layout_marginBottom = "10dp",
         {
           Button,
           id = "btnDeleteLines",
           text = "Delete",
+          layout_width = "0dp",
           layout_weight = 1,
         },
         {
           Button,
           id = "btnReplaceSaveLines",
           text = "Replace & Save",
+          layout_width = "0dp",
           layout_weight = 1,
         },
       },
       {
-        Button,
-        id = "btnSyntaxCheck",
-        text = "Check Syntax",
+        LinearLayout,
+        orientation = "horizontal",
         layout_width = "fill",
-        layout_marginBottom = "10dp",
+        {
+          Button,
+          id = "btnSyntaxCheck",
+          text = "Check Syntax",
+          layout_width = "0dp",
+          layout_weight = 1,
+        },
+        {
+          Button,
+          id = "btnLineEditorBack",
+          text = "Go Back",
+          layout_width = "0dp",
+          layout_weight = 1,
+        },
       },
-      {
-        Button,
-        id = "btnLineEditorBack",
-        text = "Go Back",
-        layout_width = "fill",
-        layout_marginBottom = "25dp",
-        textSize = "16sp",
-      },
-    }
+    },
   }
   
   lineDlg.setView(loadlayout(lineEditorLayout, lViews))
@@ -1287,26 +1355,31 @@ local function openLineEditorWindow()
       LinearLayout,
       orientation = "vertical",
       padding = "20dp",
+      layout_width = "fill",
       {
         TextView,
         text = string.format("Are you sure you want to delete Line %d to Line %d?", sLine, eLine),
         textSize = "16sp",
-        layout_marginBottom = "20dp",
+        padding = "6dp",
+        layout_width = "fill",
       },
       {
         LinearLayout,
         orientation = "horizontal",
         layout_width = "fill",
+        padding = "4dp",
         {
           Button,
           id = "btnConfirmLineDel",
           text = "Confirm Delete",
+          layout_width = "0dp",
           layout_weight = 1,
         },
         {
           Button,
           id = "btnCancelLineDel",
           text = "Cancel",
+          layout_width = "0dp",
           layout_weight = 1,
         },
       }
@@ -1386,7 +1459,7 @@ local function openLineEditorWindow()
 end
 
 -- =========================================================================
--- 6. SETTINGS, ABOUT & SUPPORT, AND DESCRIPTION MENUS
+-- 6. SETTINGS, ABOUT & SUPPORT, AND ROMAN URDU DESCRIPTION MENUS
 -- =========================================================================
 local function openAboutSupportMenu()
   local aboutDlg = LuaDialog()
@@ -1396,20 +1469,21 @@ local function openAboutSupportMenu()
   local aboutLayout = {
     LinearLayout,
     orientation = "vertical",
-    padding = "24dp",
+    padding = "22dp",
+    layout_width = "fill",
     {
       TextView,
       text = "Extension: Smart Code & File Master Pro\nCreator: Mohammad Usman\nWhatsApp: " .. whatsappNumber,
       textSize = "16sp",
-      layout_marginBottom = "20dp",
+      padding = "8dp",
       textIsSelectable = true,
+      layout_width = "fill",
     },
     {
       Button,
       id = "btnCopyNumber",
       text = "Copy Number",
       layout_width = "fill",
-      layout_marginBottom = "10dp",
       textSize = "15sp",
     },
     {
@@ -1417,7 +1491,6 @@ local function openAboutSupportMenu()
       id = "btnContactWhatsapp",
       text = "Contact WhatsApp",
       layout_width = "fill",
-      layout_marginBottom = "12dp",
       textSize = "15sp",
     },
     {
@@ -1456,57 +1529,91 @@ end
 
 local function openDescriptionMenu()
   local descDlg = LuaDialog()
-  descDlg.setTitle("Description")
+  descDlg.setTitle("Description (Roman Urdu)")
   local dViews = {}
   
-  local descriptionText = "Assalamu Alaikum! Welcome to Smart Code & File Master Pro, created by Mohammad Usman.\n\n" ..
-    "What this extension does:\n" ..
-    "1. Unlimited Code & Text Editor: Paste or write unlimited code and view live Characters, Words, and Lines count right after the code box.\n" ..
-    "2. Multi-Format File Creator: Save files in Lua, TXT, JSON, XML, HTML, and more inside the Smart_Code_And_File_Master_Pro folder on your phone storage.\n" ..
-    "3. Clear Code: Clean extra blank lines and junk spaces from your code safely without losing any word or breaking code syntax.\n" ..
-    "4. Browse & Zip Manager: View all phone storage folders, load text into the editor, rename files or folders, compress single or multiple items into a Zip archive, or extract Zip and APK files easily.\n" ..
-    "5. Split Code: Divide large scripts into equal line-safe parts for easy copying.\n" ..
-    "6. Edit Lines: Search words to find line numbers, select specific lines, and replace or delete them accurately.\n\n" ..
-    "How did you like this extension? We hope you find it very useful! Okay, Allah Hafiz!"
+  local descriptionText = "Assalam-o-Alaikum! Smart Code & File Master Pro mein khush aamdeed, is extension ko Mohammad Usman ne tayyar kiya hai.\n\n" ..
+    "Is Extension Ki Mukammal Tafseel Aur Features:\n\n" ..
+    "1. Unlimited Code Aur Text Editor:\n" ..
+    "Is ke bade edit box mein aap jitna lamba chahein code ya text likh aur paste kar sakte hain. Edit box ke bilkul niche live counter laga hua hai jo aap ko har waqt Characters, Words, Lines aur File Format ki mukammal tadad batata hai.\n\n" ..
+    "2. Multi-Format File Creator:\n" ..
+    "Aap apni pasand ki file category (.lua, .txt, .json, .xml, .html, .sh, .prop, .js, .css, .md) select kar ke Create File button dabayein. Aap ki file phone storage mein Smart_Code_And_File_Master_Pro folder ke andar foran save ho jaye gi.\n\n" ..
+    "3. Clear Code (Safe Code Cleaner):\n" ..
+    "Yeh button aap ke code mein se faltu khali lines aur extra junk spaces ko saaf karta hai, aur aap ka koi bhi lafz ya code bilkul kharab nahi hone deta.\n\n" ..
+    "4. Browse Phone Storage Aur Zip Manager:\n" ..
+    "Browse button se aap apne mobile ki mukammal phone storage dekh sakte hain:\n" ..
+    "- Kisi bhi folder par click karein to View Folder aur Select ka option aata hai.\n" ..
+    "- View Text button se kisi bhi file ka code seedha main editor mein load kar sakte hain.\n" ..
+    "- Compress button se aik ya zyada files aur folders ko select kar ke Zip file bana sakte hain.\n" ..
+    "- Extract button se kisi bhi Zip ya APK file ko unzip (extract) kar sakte hain.\n" ..
+    "- Rename aur Delete buttons se kisi bhi file ya folder ka naam tabdeel kar sakte hain ya delete kar sakte hain.\n\n" ..
+    "5. Split Code (Code Splitter):\n" ..
+    "Agar aap ka code bohat bada hai to Split Code button se aap usay 2 ya zyada barabar hisson (parts) mein taqseem kar sakte hain. Har part ki lines bilkul mehfooz rehti hain aur har part ke sath apna Copy button mojood hai.\n\n" ..
+    "6. Edit Lines (Line-by-Line Editor & Syntax Check):\n" ..
+    "Is feature se aap kisi bhi lafz ko search kar ke us ka line number maloom kar sakte hain, Start Line se End Line tak code select kar ke usay tabdeel (Replace & Save) ya Delete kar sakte hain, aur Check Syntax button se apne Lua code ki ghaltiyan check kar sakte hain.\n\n" ..
+    "7. Sound Tone Aur Support:\n" ..
+    "Settings mein aap Sound Tone ko ON ya OFF kar sakte hain (jo hamesha yaad rehta hai) aur About and Support se seedha Mohammad Usman ke WhatsApp par rabta kar sakte hain.\n\n" ..
+    "Umeed hai aap ko yeh extension bohat pasand aaye gi! Okay, Allah Hafiz!"
   
   local descLayout = {
-    ScrollView,
+    LinearLayout,
+    orientation = "vertical",
+    padding = "16dp",
     layout_width = "fill",
     layout_height = "fill",
-    fillViewport = true,
+    -- Scrollable Text Area
+    {
+      ScrollView,
+      layout_width = "fill",
+      layout_height = "0dp",
+      layout_weight = 1,
+      fillViewport = true,
+      {
+        LinearLayout,
+        orientation = "vertical",
+        layout_width = "fill",
+        padding = "6dp",
+        {
+          TextView,
+          text = descriptionText,
+          textSize = "15sp",
+          textIsSelectable = true,
+          layout_width = "fill",
+        },
+      },
+    },
+    -- Fixed Bottom Action Buttons
     {
       LinearLayout,
       orientation = "vertical",
-      padding = "22dp",
+      layout_width = "fill",
+      padding = "4dp",
       {
-        TextView,
-        text = descriptionText,
-        textSize = "15sp",
-        layout_marginBottom = "18dp",
-        textIsSelectable = true,
-      },
-      {
-        Button,
-        id = "btnReadDesc",
-        text = "Read Description Aloud",
+        LinearLayout,
+        orientation = "horizontal",
         layout_width = "fill",
-        layout_marginBottom = "10dp",
-      },
-      {
-        Button,
-        id = "btnCopyDesc",
-        text = "Copy Description",
-        layout_width = "fill",
-        layout_marginBottom = "10dp",
+        {
+          Button,
+          id = "btnReadDesc",
+          text = "Read Description",
+          layout_width = "0dp",
+          layout_weight = 1,
+        },
+        {
+          Button,
+          id = "btnCopyDesc",
+          text = "Copy Description",
+          layout_width = "0dp",
+          layout_weight = 1,
+        },
       },
       {
         Button,
         id = "btnDescBack",
         text = "Go Back",
         layout_width = "fill",
-        layout_marginBottom = "20dp",
       },
-    }
+    },
   }
   
   descDlg.setView(loadlayout(descLayout, dViews))
@@ -1537,13 +1644,13 @@ local function openSettingsMenu()
   local setLayout = {
     LinearLayout,
     orientation = "vertical",
-    padding = "24dp",
+    padding = "22dp",
+    layout_width = "fill",
     {
       Button,
       id = "btnToggleSound",
       text = "Sound Tone: " .. (soundEnabled and "ON" or "OFF"),
       layout_width = "fill",
-      layout_marginBottom = "12dp",
       textSize = "16sp",
     },
     {
@@ -1551,7 +1658,6 @@ local function openSettingsMenu()
       id = "btnOpenAbout",
       text = "About and Support",
       layout_width = "fill",
-      layout_marginBottom = "12dp",
       textSize = "16sp",
     },
     {
@@ -1559,7 +1665,6 @@ local function openSettingsMenu()
       id = "btnOpenDescription",
       text = "Description",
       layout_width = "fill",
-      layout_marginBottom = "12dp",
       textSize = "16sp",
     },
     {
@@ -1602,139 +1707,180 @@ local function openSettingsMenu()
 end
 
 -- =========================================================================
--- 7. MAIN MENU LAYOUT & CONTROLS (Clean Hints, Simple Names, Exact Order)
+-- 7. MAIN MENU LAYOUT (Scrollable Editor Top + Fixed Bottom Action Buttons)
 -- =========================================================================
-local mainScrollLayout = {
-  ScrollView,
+local mainRootLayout = {
+  LinearLayout,
+  orientation = "vertical",
+  padding = "14dp",
   layout_width = "fill",
   layout_height = "fill",
-  fillViewport = true,
+  -- TOP SCROLLABLE SECTION (Header, File Name, Category, Code Box, Live Counter)
+  {
+    ScrollView,
+    layout_width = "fill",
+    layout_height = "0dp",
+    layout_weight = 1,
+    fillViewport = true,
+    {
+      LinearLayout,
+      orientation = "vertical",
+      layout_width = "fill",
+      padding = "4dp",
+      -- 1. Extension Name Only
+      {
+        TextView,
+        id = "txtHeaderTitle",
+        text = "Smart Code & File Master Pro",
+        textSize = "17sp",
+        gravity = "center",
+        padding = "6dp",
+        layout_width = "fill",
+      },
+      -- 2. File Name EditBox
+      {
+        EditText,
+        id = "edtFileName",
+        hint = "Enter File Name",
+        layout_width = "fill",
+      },
+      -- 3. File Category Selector (Default .lua)
+      {
+        LinearLayout,
+        orientation = "horizontal",
+        layout_width = "fill",
+        gravity = "center_vertical",
+        padding = "4dp",
+        {
+          TextView,
+          text = "Category: ",
+          textSize = "15sp",
+        },
+        {
+          Spinner,
+          id = "spnFileCategory",
+          layout_width = "0dp",
+          layout_weight = 1,
+        },
+      },
+      -- 4. Unlimited Code / Text EditBox
+      {
+        EditText,
+        id = "edtTextContent",
+        hint = "Paste Code or Text",
+        layout_width = "fill",
+        layout_height = "165dp",
+        gravity = "top",
+      },
+      -- 5. Live Character, Word & Line Counter (Placed right after Code EditBox)
+      {
+        TextView,
+        id = "txtCounter",
+        text = "Characters: 0 | Words: 0 | Lines: 0 | Format: .lua",
+        textSize = "14sp",
+        padding = "6dp",
+        layout_width = "fill",
+      },
+    },
+  },
+  -- FIXED BOTTOM ACTION BUTTONS (Always stays pinned at bottom of screen)
   {
     LinearLayout,
     orientation = "vertical",
-    padding = "22dp",
-    -- 1. Extension Name Only (No Creator Name in Header)
-    {
-      TextView,
-      id = "txtHeaderTitle",
-      text = "Smart Code & File Master Pro",
-      textSize = "17sp",
-      gravity = "center",
-      layout_marginBottom = "14dp",
-    },
-    -- 2. File Name EditBox (Simple Hint)
-    {
-      EditText,
-      id = "edtFileName",
-      hint = "Enter File Name",
-      layout_width = "fill",
-      layout_marginBottom = "10dp",
-    },
-    -- 3. File Category Selector (Default .lua)
+    layout_width = "fill",
+    padding = "4dp",
+    -- Row 1: Clear Code | Copy
     {
       LinearLayout,
       orientation = "horizontal",
       layout_width = "fill",
-      gravity = "center_vertical",
-      layout_marginBottom = "10dp",
       {
-        TextView,
-        text = "Category: ",
-        textSize = "15sp",
-      },
-      {
-        Spinner,
-        id = "spnFileCategory",
+        Button,
+        id = "btnCleanCode",
+        text = "Clear Code",
+        layout_width = "0dp",
         layout_weight = 1,
+        textSize = "14sp",
+      },
+      {
+        Button,
+        id = "btnCopyText",
+        text = "Copy",
+        layout_width = "0dp",
+        layout_weight = 1,
+        textSize = "14sp",
       },
     },
-    -- 4. Unlimited Code / Text EditBox (Simple Hint)
+    -- Row 2: Create File | Browse
     {
-      EditText,
-      id = "edtTextContent",
-      hint = "Paste Code or Text",
+      LinearLayout,
+      orientation = "horizontal",
       layout_width = "fill",
-      layout_height = "175dp",
-      gravity = "top",
-      layout_marginBottom = "8dp",
+      {
+        Button,
+        id = "btnCreateFile",
+        text = "Create File",
+        layout_width = "0dp",
+        layout_weight = 1,
+        textSize = "14sp",
+      },
+      {
+        Button,
+        id = "btnBrowseFiles",
+        text = "Browse",
+        layout_width = "0dp",
+        layout_weight = 1,
+        textSize = "14sp",
+      },
     },
-    -- 5. Live Character, Word & Line Counter (Placed right after Code EditBox)
+    -- Row 3: Split Code | Edit Lines
     {
-      TextView,
-      id = "txtCounter",
-      text = "Characters: 0 | Words: 0 | Lines: 0 | Format: .lua",
-      textSize = "14sp",
-      layout_marginBottom = "14dp",
-    },
-    -- 6. Simple Action Buttons
-    {
-      Button,
-      id = "btnCleanCode",
-      text = "Clear Code",
+      LinearLayout,
+      orientation = "horizontal",
       layout_width = "fill",
-      layout_marginBottom = "8dp",
-      textSize = "15sp",
+      {
+        Button,
+        id = "btnSplitScript",
+        text = "Split Code",
+        layout_width = "0dp",
+        layout_weight = 1,
+        textSize = "14sp",
+      },
+      {
+        Button,
+        id = "btnEditLines",
+        text = "Edit Lines",
+        layout_width = "0dp",
+        layout_weight = 1,
+        textSize = "14sp",
+      },
     },
+    -- Row 4: Settings | Close
     {
-      Button,
-      id = "btnCopyText",
-      text = "Copy",
+      LinearLayout,
+      orientation = "horizontal",
       layout_width = "fill",
-      layout_marginBottom = "8dp",
-      textSize = "15sp",
+      {
+        Button,
+        id = "btnSettings",
+        text = "Settings",
+        layout_width = "0dp",
+        layout_weight = 1,
+        textSize = "14sp",
+      },
+      {
+        Button,
+        id = "btnCloseExtension",
+        text = "Close",
+        layout_width = "0dp",
+        layout_weight = 1,
+        textSize = "14sp",
+      },
     },
-    {
-      Button,
-      id = "btnCreateFile",
-      text = "Create File",
-      layout_width = "fill",
-      layout_marginBottom = "8dp",
-      textSize = "15sp",
-    },
-    {
-      Button,
-      id = "btnBrowseFiles",
-      text = "Browse",
-      layout_width = "fill",
-      layout_marginBottom = "8dp",
-      textSize = "15sp",
-    },
-    {
-      Button,
-      id = "btnSplitScript",
-      text = "Split Code",
-      layout_width = "fill",
-      layout_marginBottom = "8dp",
-      textSize = "15sp",
-    },
-    {
-      Button,
-      id = "btnEditLines",
-      text = "Edit Lines",
-      layout_width = "fill",
-      layout_marginBottom = "8dp",
-      textSize = "15sp",
-    },
-    {
-      Button,
-      id = "btnSettings",
-      text = "Settings",
-      layout_width = "fill",
-      layout_marginBottom = "8dp",
-      textSize = "15sp",
-    },
-    {
-      Button,
-      id = "btnCloseExtension",
-      text = "Close",
-      layout_width = "fill",
-      layout_marginBottom = "22dp",
-      textSize = "15sp",
-    },
-  }
+  },
 }
 
-dlg.setView(loadlayout(mainScrollLayout, views))
+dlg.setView(loadlayout(mainRootLayout, views))
 
 -- Setup Category Spinner (Default .lua at index 0)
 local catAdapter = ArrayAdapter(service, android.R.layout.simple_spinner_dropdown_item, fileCategories)
@@ -1802,26 +1948,31 @@ views.btnCreateFile.onClick = function()
       LinearLayout,
       orientation = "vertical",
       padding = "20dp",
+      layout_width = "fill",
       {
         TextView,
         text = "File '" .. finalFileName .. "' already exists. Do you want to overwrite it?",
         textSize = "15sp",
-        layout_marginBottom = "18dp",
+        padding = "6dp",
+        layout_width = "fill",
       },
       {
         LinearLayout,
         orientation = "horizontal",
         layout_width = "fill",
+        padding = "4dp",
         {
           Button,
           id = "btnConfirmOverwrite",
           text = "Overwrite",
+          layout_width = "0dp",
           layout_weight = 1,
         },
         {
           Button,
           id = "btnCancelOverwrite",
           text = "Cancel",
+          layout_width = "0dp",
           layout_weight = 1,
         },
       }
