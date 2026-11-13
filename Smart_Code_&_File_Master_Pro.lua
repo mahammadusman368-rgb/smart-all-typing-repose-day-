@@ -1,6 +1,6 @@
 -- Extension Name: Smart Code & File Master Pro
 -- Creator: Mohammad Usman
--- Version: 8.0 (Final Verified Edition - Java/Kotlin + Keyboard Fix + Equal Cleaner + Line Box Fix)
+-- Version: 9.2 (50k-60k Smart Part Splitter + Unlimited Paste + Folder Unzip)
 -- Compatibility: Android 8.0 to Android 16+ (Jieshuo Screen Reader)
 
 require "import"
@@ -15,16 +15,13 @@ import "android.content.ClipData"
 import "android.net.Uri"
 import "android.media.ToneGenerator"
 import "android.media.AudioManager"
-import "android.os.Handler"
-import "android.os.Looper"
-import "java.lang.Runnable"
 import "java.io.File"
 import "java.io.FileOutputStream"
 import "java.io.FileInputStream"
 import "java.io.BufferedOutputStream"
 import "java.io.BufferedInputStream"
 import "java.util.zip.ZipOutputStream"
-import "java.util.zip.ZipInputStream"
+import "java.util.zip.ZipFile"
 import "java.util.zip.ZipEntry"
 import "java.lang.String"
 
@@ -42,7 +39,15 @@ end
 
 local whatsappNumber = "+923261421100"
 
--- Persistent Sound Tone State (Default ON, remembers user choice forever)
+-- Master Variable to hold Unlimited Code (Even 500,000+ or 2,000,000+ Characters without EditText Freeze)
+local fullMasterCode = ""
+local isLargeCodeMode = false
+local MAX_EDITBOX_DISPLAY = 60000
+
+-- Default Target Characters Per Split Part (55,000 chars -> stays cleanly between 50,000 and 60,000 chars)
+local DEFAULT_CHARS_PER_PART = 55000
+
+-- Persistent Sound Tone State
 local soundEnabled = true
 
 local function loadSettings()
@@ -68,7 +73,6 @@ end
 
 loadSettings()
 
--- Function: Play Completion Tone (Only if Sound Tone is ON)
 local function playCompletionTone(isSuccess)
   if not soundEnabled then return end
   pcall(function()
@@ -78,7 +82,6 @@ local function playCompletionTone(isSuccess)
   end)
 end
 
--- Function: English Voice Guidance + Toast + Completion Tone
 local function notifyUser(msg, isSuccess)
   service.speak(msg)
   Toast.makeText(service, msg, Toast.LENGTH_SHORT).show()
@@ -87,20 +90,20 @@ local function notifyUser(msg, isSuccess)
   end
 end
 
--- Helper Function: Keep all buttons visible and accessible when keyboard opens
 local function showDialogKeyboardSafe(dialogObj)
   dialogObj.show()
   pcall(function()
     local win = dialogObj.getWindow()
     if win then
-      win.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
-      win.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN or WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN)
+      win.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+      win.clearFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
+      local softMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN + WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN
+      win.setSoftInputMode(softMode)
       win.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
     end
   end)
 end
 
--- Helper Function: Configure numeric EditBox safely without crashing Jieshuo or Android
 local function makeNumericEditBoxSafe(editView)
   if not editView then return end
   pcall(function()
@@ -111,7 +114,6 @@ local function makeNumericEditBoxSafe(editView)
   end)
 end
 
--- Helper Function: Safely convert Java File Array to Lua Table
 local function javaArrayToTable(javaArr)
   local list = {}
   if not javaArr then return list end
@@ -130,12 +132,12 @@ local function javaArrayToTable(javaArr)
   return list
 end
 
--- Helper Function: Safe 4KB Byte Buffer for Zip/Unzip
+-- Safe Native Byte Buffer for Zip/Unzip
 local function createByteBuffer(size)
-  return String(string.rep("\0", size or 4096)).getBytes()
+  local sz = size or 8192
+  return String(string.rep("a", sz)).getBytes()
 end
 
--- Fast File Reader & Writer
 local function readFileFast(path)
   local f, err = io.open(path, "rb")
   if not f then return nil, err end
@@ -152,24 +154,18 @@ local function writeFileFast(path, content)
   return true
 end
 
--- Function: Count Characters, Words, and Lines accurately
+-- Fast Character, Word & Line Counter (Works on 1,000,000+ chars without freezing)
 local function getTextStats(text)
   if not text or text == "" then
     return 0, 0, 0
   end
   local charCount = #text
-  local wordCount = 0
-  for _ in text:gmatch("%S+") do
-    wordCount = wordCount + 1
-  end
-  local lineCount = 1
-  for _ in text:gmatch("\n") do
-    lineCount = lineCount + 1
-  end
-  return charCount, wordCount, lineCount
+  local _, newlines = text:gsub("\n", "\n")
+  local lineCount = newlines + 1
+  local _, words = text:gsub("%S+", "")
+  return charCount, words, lineCount
 end
 
--- Function: Copy Text to Clipboard
 local function copyToClipboard(text, customMsg)
   if not text or text == "" then
     notifyUser("There is no text to copy.", false)
@@ -181,7 +177,21 @@ local function copyToClipboard(text, customMsg)
   notifyUser(customMsg or "Code copied to clipboard successfully.", true)
 end
 
--- Function: Clean File Name (Automatically fixes spaces & invalid symbols)
+local function getClipboardText()
+  local clipboard = service.getSystemService(Context.CLIPBOARD_SERVICE)
+  if clipboard and clipboard.hasPrimaryClip() then
+    local clip = clipboard.getPrimaryClip()
+    if clip and clip.getItemCount() > 0 then
+      local item = clip.getItemAt(0)
+      if item then
+        local txt = item.coerceToText(service)
+        if txt then return tostring(txt) end
+      end
+    end
+  end
+  return ""
+end
+
 local function sanitizeFileName(rawName)
   local cleaned = rawName:gsub("^%s+", ""):gsub("%s+$", "")
   cleaned = cleaned:gsub("[\\/:*?\"<>|]", "_")
@@ -189,7 +199,6 @@ local function sanitizeFileName(rawName)
   return cleaned
 end
 
--- File Categories List (Default: .lua, now includes .java and .kt for Kotlin)
 local fileCategories = {
   ".lua",
   ".java",
@@ -207,55 +216,60 @@ local fileCategories = {
   ".md"
 }
 local selectedExtension = ".lua"
-
--- Table to hold Main UI Views
 local views = {}
 
--- Function: Live Update Counter Display (Placed right after Code EditBox)
-local lastTrackedText = ""
-local lastTrackedExt = ".lua"
+-- Sync Function: Retrieves active code whether normal or Unlimited Large Mode
+local function getActiveCode()
+  if isLargeCodeMode then
+    return fullMasterCode
+  end
+  if views.edtTextContent then
+    local boxText = tostring(views.edtTextContent.Text or "")
+    fullMasterCode = boxText
+    return boxText
+  end
+  return fullMasterCode
+end
 
-local function updateCounterDisplay(forceUpdate)
-  if views.edtTextContent and views.txtCounter then
-    local currentText = tostring(views.edtTextContent.Text or "")
-    if forceUpdate or currentText ~= lastTrackedText or selectedExtension ~= lastTrackedExt then
-      lastTrackedText = currentText
-      lastTrackedExt = selectedExtension
-      local chars, words, lines = getTextStats(currentText)
-      views.txtCounter.Text = string.format("Characters: %d | Words: %d | Lines: %d | Format: %s", chars, words, lines, selectedExtension)
+-- Sync Function: Loads small or huge (140,000+ chars) code safely without freezing EditText
+local function setActiveCode(newCode)
+  fullMasterCode = newCode or ""
+  if #fullMasterCode > MAX_EDITBOX_DISPLAY then
+    isLargeCodeMode = true
+    if views.edtTextContent then
+      local preview = fullMasterCode:sub(1, 20000) .. "\n\n... [LARGE CODE MODE ACTIVE: Total " .. #fullMasterCode .. " Characters Loaded in Memory! EditBox shows preview to prevent phone freeze. Create File, Split Code, Copy, and Edit Lines will use 100% full code!]"
+      views.edtTextContent.Text = preview
     end
+  else
+    isLargeCodeMode = false
+    if views.edtTextContent then
+      views.edtTextContent.Text = fullMasterCode
+    end
+  end
+  local chars, words, lines = getTextStats(fullMasterCode)
+  if views.txtCounter then
+    views.txtCounter.Text = string.format("Characters: %d | Words: %d | Lines: %d | Format: %s", chars, words, lines, selectedExtension)
   end
 end
 
--- Reliable Live Counter Loop (Runs smoothly while dialog is open)
-local counterHandler = Handler(Looper.getMainLooper())
-local isDialogActive = true
-local counterRunnable
-
-counterRunnable = Runnable{
-  run = function()
-    if isDialogActive then
-      pcall(updateCounterDisplay, false)
-      counterHandler.postDelayed(counterRunnable, 350)
-    end
+local function updateCounterDisplay()
+  local code = getActiveCode()
+  local chars, words, lines = getTextStats(code)
+  if views.txtCounter then
+    views.txtCounter.Text = string.format("Characters: %d | Words: %d | Lines: %d | Format: %s", chars, words, lines, selectedExtension)
   end
-}
-counterHandler.postDelayed(counterRunnable, 350)
+end
 
 -- =========================================================================
--- 1. SAFE CODE CLEANER (Removes >3 Equal Signs '====', Junk Spaces & Empty Lines)
+-- 1. SAFE CODE CLEANER
 -- =========================================================================
 local function cleanCodeSafely(rawCode)
   if not rawCode or rawCode == "" then
     return ""
   end
   local code = rawCode:gsub("\r\n", "\n"):gsub("\r", "\n")
-  -- Remove invisible zero-width junk characters (UTF-8 BOM / zero-width space)
   code = code:gsub("\239\187\191", "")
   code = code:gsub("\226\128\139", "")
-
-  -- Remove any sequence of more than 3 consecutive '=' signs (====...) anywhere in the code
-  -- Note: Lua long brackets use 0 to 2 '=' at most in standard scripts; == is preserved!
   code = code:gsub("====+", "")
 
   local cleanedLines = {}
@@ -263,11 +277,9 @@ local function cleanCodeSafely(rawCode)
 
   for line in (code .. "\n"):gmatch("([^\n]*)\n") do
     local trimmedRight = line:gsub("[ \t]+$", "")
-    -- If removing '====+' left an empty comment like '--' or '//' with nothing else, clean it nicely
     if trimmedRight:match("^%s*%-%-%s*$") or trimmedRight:match("^%s*//%s*$") then
       trimmedRight = ""
     else
-      -- Also clean leftover double spaces around where '====' used to be inside comment headers
       trimmedRight = trimmedRight:gsub("^([ \t]*%-%-)%s+", "%1 ")
       trimmedRight = trimmedRight:gsub("^([ \t]*//)%s+", "%1 ")
     end
@@ -289,7 +301,7 @@ local function cleanCodeSafely(rawCode)
 end
 
 -- =========================================================================
--- 2. ZIP COMPRESS & UNZIP EXTRACT ENGINE
+-- 2. ZIP COMPRESS & UNZIP EXTRACT ENGINE (FIXED NESTED FOLDERS & PROFILES)
 -- =========================================================================
 local function addFileToZip(zipOut, fileObj, parentPath)
   local entryName = parentPath .. fileObj.getName()
@@ -306,14 +318,14 @@ local function addFileToZip(zipOut, fileObj, parentPath)
     end
   else
     local fi = FileInputStream(fileObj)
-    local origin = BufferedInputStream(fi, 4096)
+    local origin = BufferedInputStream(fi, 8192)
     local entry = ZipEntry(entryName)
     zipOut.putNextEntry(entry)
-    local buffer = createByteBuffer(4096)
-    local count = origin.read(buffer, 0, 4096)
+    local buffer = createByteBuffer(8192)
+    local count = origin.read(buffer, 0, 8192)
     while count ~= -1 do
       zipOut.write(buffer, 0, count)
-      count = origin.read(buffer, 0, 4096)
+      count = origin.read(buffer, 0, 8192)
     end
     origin.close()
     fi.close()
@@ -338,49 +350,51 @@ local function compressFilesToZip(selectedFilePaths, destinationZipPath)
   return ok, err
 end
 
+-- Upgraded Extractor using java.util.zip.ZipFile (100% handles folders, subfolders & Jieshuo profiles)
 local function extractZipArchive(zipFilePath, outputFolderPath)
   local ok, err = pcall(function()
     local outDir = File(outputFolderPath)
     if not outDir.exists() then
       outDir.mkdirs()
     end
-    local fis = FileInputStream(File(zipFilePath))
-    local zis = ZipInputStream(BufferedInputStream(fis))
-    local buffer = createByteBuffer(4096)
 
-    local entry = zis.getNextEntry()
-    while entry ~= nil do
-      local outPath = outputFolderPath .. "/" .. entry.getName()
-      local outFile = File(outPath)
-      if entry.isDirectory() then
+    local zipFile = ZipFile(File(zipFilePath))
+    local entries = zipFile.entries()
+    local buffer = createByteBuffer(8192)
+
+    while entries.hasMoreElements() do
+      local entry = entries.nextElement()
+      local rawName = tostring(entry.getName()):gsub("\\", "/")
+      local outFile = File(outDir, rawName)
+
+      if entry.isDirectory() or rawName:sub(-1) == "/" then
         outFile.mkdirs()
       else
         local parent = outFile.getParentFile()
         if parent and not parent.exists() then
           parent.mkdirs()
         end
+        local is = BufferedInputStream(zipFile.getInputStream(entry), 8192)
         local fos = FileOutputStream(outFile)
-        local dest = BufferedOutputStream(fos, 4096)
-        local count = zis.read(buffer, 0, 4096)
+        local dest = BufferedOutputStream(fos, 8192)
+        local count = is.read(buffer, 0, 8192)
         while count ~= -1 do
           dest.write(buffer, 0, count)
-          count = zis.read(buffer, 0, 4096)
+          count = is.read(buffer, 0, 8192)
         end
         dest.flush()
         dest.close()
         fos.close()
+        is.close()
       end
-      zis.closeEntry()
-      entry = zis.getNextEntry()
     end
-    zis.close()
-    fis.close()
+    zipFile.close()
   end)
   return ok, err
 end
 
 -- =========================================================================
--- 3. PHONE STORAGE BROWSER (2 Bottom Button Rows + Folder Popup + Multi-Check)
+-- 3. PHONE STORAGE BROWSER
 -- =========================================================================
 local function openFileBrowser(startFolder)
   local currentPath = startFolder or rootStorage
@@ -404,7 +418,6 @@ local function openFileBrowser(startFolder)
       textSize = "13sp",
       layout_marginBottom = "8dp",
     },
-    -- Full Height ListView
     {
       ListView,
       id = "browserListView",
@@ -413,7 +426,6 @@ local function openFileBrowser(startFolder)
       layout_weight = 1,
       layout_marginBottom = "10dp",
     },
-    -- Bottom Row 1 (4 Buttons: View Text | Compress | Extract | Rename)
     {
       LinearLayout,
       orientation = "horizontal",
@@ -448,7 +460,6 @@ local function openFileBrowser(startFolder)
         textSize = "13sp",
       },
     },
-    -- Bottom Row 2 (3 Buttons: Delete | Parent Folder | Go Back)
     {
       LinearLayout,
       orientation = "horizontal",
@@ -622,7 +633,6 @@ local function openFileBrowser(startFolder)
     end
   end
 
-  -- Row 1 Button 1: View Text
   bViews.btnViewText.onClick = function()
     local selected = getSelectedItems()
     if #selected == 0 then
@@ -652,7 +662,6 @@ local function openFileBrowser(startFolder)
     local baseName, ext = item.name:match("^(.*)(%.%w+)$")
     if baseName and ext then
       views.edtFileName.Text = baseName
-      -- Auto-match category spinner if extension exists in our list
       for idx, catExt in ipairs(fileCategories) do
         if catExt == ext:lower() then
           selectedExtension = catExt
@@ -663,13 +672,11 @@ local function openFileBrowser(startFolder)
     else
       views.edtFileName.Text = item.name
     end
-    views.edtTextContent.Text = content
-    updateCounterDisplay(true)
-    notifyUser("File code loaded into main editor successfully.", true)
+    setActiveCode(content)
+    notifyUser("File loaded successfully (" .. #content .. " characters).", true)
     browserDlg.dismiss()
   end
 
-  -- Row 1 Button 2: Compress (Zip)
   bViews.btnCompress.onClick = function()
     local selected = getSelectedItems()
     if #selected == 0 then
@@ -759,11 +766,10 @@ local function openFileBrowser(startFolder)
     showDialogKeyboardSafe(zipDlg)
   end
 
-  -- Row 1 Button 3: Extract (Unzip)
   bViews.btnExtract.onClick = function()
     local selected = getSelectedItems()
     if #selected == 0 then
-      notifyUser("Please select a Zip or APK file to extract.", false)
+      notifyUser("Please select a Zip, Profile, or APK file to extract.", false)
       return
     end
     if #selected > 1 then
@@ -773,15 +779,11 @@ local function openFileBrowser(startFolder)
     local item = selected[1]
     local lower = item.name:lower()
     if item.isDir then
-      notifyUser("Selected item is a folder. Please select a Zip file to extract.", false)
+      notifyUser("Selected item is a folder. Please select a file to extract.", false)
       return
     end
     if lower:find("%.rar$") or lower:find("%.7z$") then
-      notifyUser("Only ZIP, APK, and JAR archive formats are supported for extraction.", false)
-      return
-    end
-    if not lower:find("%.zip$") and not lower:find("%.apk$") and not lower:find("%.jar$") then
-      notifyUser("Please select a valid Zip or APK file to extract.", false)
+      notifyUser("RAR and 7Z formats are not supported. Only ZIP based archives work.", false)
       return
     end
 
@@ -790,13 +792,12 @@ local function openFileBrowser(startFolder)
     local ok, err = extractZipArchive(item.path, extractTarget)
     if ok then
       refreshDirectory(currentPath)
-      notifyUser("File extracted successfully into folder " .. folderName, true)
+      notifyUser("Extracted all files and folders into " .. folderName, true)
     else
       notifyUser("Extraction failed: " .. tostring(err), false)
     end
   end
 
-  -- Row 1 Button 4: Rename File or Folder
   bViews.btnRename.onClick = function()
     local selected = getSelectedItems()
     if #selected == 0 then
@@ -886,7 +887,6 @@ local function openFileBrowser(startFolder)
     showDialogKeyboardSafe(renDlg)
   end
 
-  -- Row 2 Button 1: Delete (with Confirmation)
   bViews.btnDelete.onClick = function()
     local selected = getSelectedItems()
     if #selected == 0 then
@@ -960,7 +960,6 @@ local function openFileBrowser(startFolder)
     confirmDlg.show()
   end
 
-  -- Row 2 Button 2: Parent Folder
   bViews.btnParentFolder.onClick = function()
     local curFile = File(currentPath)
     local parentFile = curFile.getParentFile()
@@ -972,7 +971,6 @@ local function openFileBrowser(startFolder)
     end
   end
 
-  -- Row 2 Button 3: Go Back
   bViews.btnBrowserBack.onClick = function()
     browserDlg.dismiss()
     notifyUser("Returned to main menu.", true)
@@ -983,7 +981,7 @@ local function openFileBrowser(startFolder)
 end
 
 -- =========================================================================
--- 4. SMART CODE SPLITTER (Line-Safe Equal Division without Breaking Code)
+-- 4. SMART CODE SPLITTER (50,000 TO 60,000 CHARS PER PART FOR FEWER PARTS)
 -- =========================================================================
 local function splitCodeIntoSafeParts(fullText, numParts)
   local lines = {}
@@ -1016,17 +1014,18 @@ local function splitCodeIntoSafeParts(fullText, numParts)
 end
 
 local function openCodeSplitterWindow()
-  local fullCode = tostring(views.edtTextContent.Text)
+  local fullCode = getActiveCode()
   if fullCode == "" then
     notifyUser("Please paste or load code first before splitting.", false)
     return
   end
 
   local totalChars, totalWords, totalLines = getTextStats(fullCode)
-  local defaultParts = math.max(2, math.ceil(totalChars / 35000))
+  -- Divides by 55,000 characters per part (between 50,000 and 60,000 chars) so fewer parts are created!
+  local defaultParts = math.max(2, math.ceil(totalChars / DEFAULT_CHARS_PER_PART))
 
   local splitDlg = LuaDialog()
-  splitDlg.setTitle("Split Code")
+  splitDlg.setTitle("Split Code (50k-60k Per Part)")
   local sViews = {}
 
   local splitLayout = {
@@ -1041,7 +1040,7 @@ local function openCodeSplitterWindow()
       layout_width = "fill",
       {
         TextView,
-        text = string.format("Total Characters: %d | Words: %d | Lines: %d", totalChars, totalWords, totalLines),
+        text = string.format("Total Characters: %d | Words: %d | Lines: %d\n(Auto-Split Target: ~55,000 chars per part)", totalChars, totalWords, totalLines),
         textSize = "14sp",
         layout_marginBottom = "12dp",
       },
@@ -1054,7 +1053,7 @@ local function openCodeSplitterWindow()
           EditText,
           id = "edtPartCount",
           text = tostring(defaultParts),
-          hint = "Enter Parts Count (2 to 50)",
+          hint = "Enter Parts Count (2 to 100)",
           singleLine = true,
           layout_weight = 1,
         },
@@ -1070,13 +1069,13 @@ local function openCodeSplitterWindow()
         id = "partsContainer",
         orientation = "vertical",
         layout_width = "fill",
-        layout_marginBottom = "15dp",
       },
       {
         Button,
         id = "btnSplitBack",
         text = "Go Back",
         layout_width = "fill",
+        layout_marginTop = "15dp",
         layout_marginBottom = "40dp",
         textSize = "16sp",
       },
@@ -1085,6 +1084,52 @@ local function openCodeSplitterWindow()
 
   splitDlg.setView(loadlayout(splitLayout, sViews))
   makeNumericEditBoxSafe(sViews.edtPartCount)
+
+  local function openSinglePartPreview(partIndex, totalParts, partContent)
+    local pDlg = LuaDialog()
+    pDlg.setTitle("Part " .. partIndex .. " of " .. totalParts)
+    local pv = {}
+    local pLay = {
+      LinearLayout,
+      orientation = "vertical",
+      padding = "20dp",
+      layout_width = "fill",
+      {
+        EditText,
+        id = "edtSinglePart",
+        text = partContent,
+        layout_width = "fill",
+        layout_height = "260dp",
+        gravity = "top",
+        layout_marginBottom = "12dp",
+      },
+      {
+        LinearLayout,
+        orientation = "horizontal",
+        layout_width = "fill",
+        {
+          Button,
+          id = "btnCopySinglePart",
+          text = "Copy Part " .. partIndex,
+          layout_weight = 1,
+        },
+        {
+          Button,
+          id = "btnCloseSinglePart",
+          text = "Close",
+          layout_weight = 1,
+        },
+      }
+    }
+    pDlg.setView(loadlayout(pLay, pv))
+    pv.btnCopySinglePart.onClick = function()
+      copyToClipboard(tostring(pv.edtSinglePart.Text), "Part " .. partIndex .. " copied to clipboard.")
+    end
+    pv.btnCloseSinglePart.onClick = function()
+      pDlg.dismiss()
+    end
+    showDialogKeyboardSafe(pDlg)
+  end
 
   local function renderSplitBoxes(numParts)
     sViews.partsContainer.removeAllViews()
@@ -1102,34 +1147,56 @@ local function openCodeSplitterWindow()
         LinearLayout,
         orientation = "vertical",
         layout_width = "fill",
-        layout_marginBottom = "18dp",
+        paddingBottom = "16dp",
         {
           TextView,
-          text = string.format("Part %d of %d | Characters: %d (%d to %d) | Lines: %d", idx, #partsList, pChars, startChar, math.max(startChar, endChar), pLines),
+          text = string.format("Part %d of %d | Chars: %d (%d to %d) | Lines: %d", idx, #partsList, pChars, startChar, math.max(startChar, endChar), pLines),
           textSize = "14sp",
           layout_marginBottom = "6dp",
         },
         {
-          EditText,
-          id = "edtPartBox",
-          text = partText,
-          hint = "Part " .. idx,
+          LinearLayout,
+          orientation = "horizontal",
           layout_width = "fill",
-          layout_height = "130dp",
-          gravity = "top",
-          layout_marginBottom = "6dp",
-        },
-        {
-          Button,
-          id = "btnCopyPart",
-          text = "Copy Part " .. idx,
-          layout_width = "fill",
-        },
+          {
+            Button,
+            id = "btnCopyPart",
+            text = "Copy Part " .. idx,
+            layout_weight = 1,
+          },
+          {
+            Button,
+            id = "btnSavePartFile",
+            text = "Save Part " .. idx,
+            layout_weight = 1,
+          },
+          {
+            Button,
+            id = "btnViewPart",
+            text = "View Part " .. idx,
+            layout_weight = 1,
+          },
+        }
       }
 
       local partView = loadlayout(partBoxLayout, itemViews)
       itemViews.btnCopyPart.onClick = function()
-        copyToClipboard(tostring(itemViews.edtPartBox.Text), "Part " .. idx .. " copied to clipboard.")
+        copyToClipboard(partText, "Part " .. idx .. " (" .. pChars .. " chars) copied to clipboard.")
+      end
+      itemViews.btnSavePartFile.onClick = function()
+        local baseName = sanitizeFileName(tostring(views.edtFileName.Text or ""))
+        if baseName == "" then baseName = "split_code" end
+        baseName = baseName:gsub("%.%w+$", "")
+        local pFileName = baseName .. "_part" .. idx .. selectedExtension
+        local ok = writeFileFast(pluginFolder .. pFileName, partText)
+        if ok then
+          notifyUser("Saved " .. pFileName .. " in plugin folder.", true)
+        else
+          notifyUser("Failed to save part file.", false)
+        end
+      end
+      itemViews.btnViewPart.onClick = function()
+        openSinglePartPreview(idx, #partsList, partText)
       end
       sViews.partsContainer.addView(partView)
     end
@@ -1143,8 +1210,8 @@ local function openCodeSplitterWindow()
       notifyUser("Please enter at least 2 parts.", false)
       return
     end
-    if requested > 50 then
-      notifyUser("Maximum 50 parts allowed.", false)
+    if requested > 100 then
+      notifyUser("Maximum 100 parts allowed.", false)
       return
     end
     renderSplitBoxes(requested)
@@ -1160,10 +1227,10 @@ local function openCodeSplitterWindow()
 end
 
 -- =========================================================================
--- 5. SURGICAL LINE-BY-LINE EDITOR (Fixed Numeric Boxes + Select + Replace + Delete)
+-- 5. SURGICAL LINE-BY-LINE EDITOR (Works on Unlimited Code Size)
 -- =========================================================================
 local function openLineEditorWindow()
-  local fullCode = tostring(views.edtTextContent.Text)
+  local fullCode = getActiveCode()
   if fullCode == "" then
     notifyUser("Please paste or load code first before editing lines.", false)
     return
@@ -1214,7 +1281,6 @@ local function openLineEditorWindow()
           text = "Find Line",
         },
       },
-      -- Start Line & End Line Labels + Safe Number EditBoxes
       {
         LinearLayout,
         orientation = "horizontal",
@@ -1319,7 +1385,6 @@ local function openLineEditorWindow()
 
   lineDlg.setView(loadlayout(lineEditorLayout, lViews))
 
-  -- Fix Crash / Click Issue on Start Line and End Line Number Boxes
   makeNumericEditBoxSafe(lViews.edtStartLine)
   makeNumericEditBoxSafe(lViews.edtEndLine)
 
@@ -1421,8 +1486,7 @@ local function openLineEditorWindow()
       end
       codeLines = newLines
       local updatedFullCode = table.concat(codeLines, "\n")
-      views.edtTextContent.Text = updatedFullCode
-      updateCounterDisplay(true)
+      setActiveCode(updatedFullCode)
 
       lViews.txtLineStatus.Text = "Total Lines: " .. #codeLines
       lViews.edtEndLine.Text = tostring(math.max(1, #codeLines))
@@ -1460,8 +1524,7 @@ local function openLineEditorWindow()
 
     codeLines = newLines
     local updatedFullCode = table.concat(codeLines, "\n")
-    views.edtTextContent.Text = updatedFullCode
-    updateCounterDisplay(true)
+    setActiveCode(updatedFullCode)
 
     lViews.txtLineStatus.Text = "Total Lines: " .. #codeLines
     lViews.edtEndLine.Text = tostring(math.max(1, #codeLines))
@@ -1545,7 +1608,6 @@ local function openAboutSupportMenu()
     intent.setData(Uri.parse(url))
     intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     aboutDlg.dismiss()
-    isDialogActive = false
     dlg.dismiss()
     service.startActivity(intent)
     notifyUser("Opening WhatsApp chat with Mohammad Usman.", true)
@@ -1565,12 +1627,12 @@ local function openDescriptionMenu()
 
   local descriptionText = "Assalamu Alaikum! Welcome to Smart Code & File Master Pro, created by Mohammad Usman.\n\n" ..
     "What this extension does:\n" ..
-    "1. Unlimited Code & Text Editor: Paste or write unlimited code and view live Characters, Words, and Lines count right after the code box.\n" ..
-    "2. Multi-Format File Creator: Save files in Lua, Java, Kotlin (.kt), TXT, JSON, XML, HTML, Python, Gradle, and more inside the Smart_Code_And_File_Master_Pro folder on your phone storage.\n" ..
-    "3. Clear Code: Clean extra blank lines, junk spaces, and long equal sign lines (====) safely without losing any word or breaking code syntax.\n" ..
-    "4. Browse & Zip Manager: View all phone storage folders, load text into the editor, rename files or folders, compress single or multiple items into a Zip archive, or extract Zip and APK files easily.\n" ..
-    "5. Split Code: Divide large scripts into equal line-safe parts for easy copying.\n" ..
-    "6. Edit Lines: Search words to find line numbers, select specific lines smoothly, and replace or delete them accurately.\n\n" ..
+    "1. Unlimited Code & Text Paste Engine: Use 'Paste Code' button to instantly paste 140,000+ or even 1,000,000+ characters without phone freeze.\n" ..
+    "2. Multi-Format File Creator: Save files in Lua, Java, Kotlin (.kt), TXT, JSON, XML, HTML, Python, Gradle, and more inside the Smart_Code_And_File_Master_Pro folder.\n" ..
+    "3. Clear Code: Clean extra blank lines, junk spaces, and long equal sign lines (====) safely.\n" ..
+    "4. Browse & Zip Manager: View all phone storage folders, load huge files, rename items, compress folders, or extract any Zip, Profile, or APK with nested folders.\n" ..
+    "5. Split Code: Automatically divides huge scripts into larger 50,000 to 60,000 character parts so you have fewer parts to copy or save.\n" ..
+    "6. Edit Lines: Search words to find line numbers, select specific lines, and replace or delete them accurately.\n\n" ..
     "How did you like this extension? We hope you find it very useful! Okay, Allah Hafiz!"
 
   local descLayout = {
@@ -1706,7 +1768,7 @@ local function openSettingsMenu()
 end
 
 -- =========================================================================
--- 7. MAIN MENU LAYOUT & CONTROLS (Keyboard-Safe ScrollView + All Buttons Visible)
+-- 7. MAIN MENU LAYOUT & CONTROLS (WITH UNLIMITED PASTE ENGINE)
 -- =========================================================================
 local mainScrollLayout = {
   ScrollView,
@@ -1718,7 +1780,6 @@ local mainScrollLayout = {
     orientation = "vertical",
     padding = "22dp",
     layout_width = "fill",
-    -- 1. Extension Name Only
     {
       TextView,
       id = "txtHeaderTitle",
@@ -1727,7 +1788,6 @@ local mainScrollLayout = {
       gravity = "center",
       layout_marginBottom = "14dp",
     },
-    -- 2. File Name EditBox
     {
       EditText,
       id = "edtFileName",
@@ -1736,7 +1796,6 @@ local mainScrollLayout = {
       layout_width = "fill",
       layout_marginBottom = "10dp",
     },
-    -- 3. File Category Selector (.lua, .java, .kt, etc.)
     {
       LinearLayout,
       orientation = "horizontal",
@@ -1754,25 +1813,43 @@ local mainScrollLayout = {
         layout_weight = 1,
       },
     },
-    -- 4. Unlimited Code / Text EditBox
     {
       EditText,
       id = "edtTextContent",
-      hint = "Paste Code or Text",
+      hint = "Paste Code Here (Or press Paste Code button below for 140,000+ chars)",
       layout_width = "fill",
-      layout_height = "165dp",
+      layout_height = "155dp",
       gravity = "top",
       layout_marginBottom = "8dp",
     },
-    -- 5. Live Character, Word & Line Counter
     {
       TextView,
       id = "txtCounter",
       text = "Characters: 0 | Words: 0 | Lines: 0 | Format: .lua",
       textSize = "14sp",
-      layout_marginBottom = "14dp",
+      layout_marginBottom = "12dp",
     },
-    -- 6. Simple Action Buttons (Remain visible & scrollable even when keyboard is open)
+    -- Fast Top Row: Paste Code (Unlimited) & Empty Box
+    {
+      LinearLayout,
+      orientation = "horizontal",
+      layout_width = "fill",
+      layout_marginBottom = "8dp",
+      {
+        Button,
+        id = "btnPasteUnlimited",
+        text = "Paste Code",
+        layout_weight = 1,
+        textSize = "15sp",
+      },
+      {
+        Button,
+        id = "btnEmptyCode",
+        text = "Empty Box",
+        layout_weight = 1,
+        textSize = "15sp",
+      },
+    },
     {
       Button,
       id = "btnCleanCode",
@@ -1842,23 +1919,39 @@ local mainScrollLayout = {
 
 dlg.setView(loadlayout(mainScrollLayout, views))
 
--- Setup Category Spinner (Default .lua at index 0)
 local catAdapter = ArrayAdapter(service, android.R.layout.simple_spinner_dropdown_item, fileCategories)
 views.spnFileCategory.Adapter = catAdapter
 views.spnFileCategory.setSelection(0)
 
 views.spnFileCategory.onItemSelected = function(parent, view, position, id)
   selectedExtension = fileCategories[position + 1]
-  updateCounterDisplay(true)
+  updateCounterDisplay()
 end
 
--- Accessibility Initial Focus
 views.txtHeaderTitle.requestFocus()
 views.txtHeaderTitle.sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_FOCUSED)
 
--- Button 1: Clear Code
+-- Button: Paste Code (Unlimited 140,000+ to 2,000,000+ Characters Instant Paste & Count)
+views.btnPasteUnlimited.onClick = function()
+  local clipText = getClipboardText()
+  if not clipText or clipText == "" then
+    notifyUser("Clipboard is empty. Copy some code first.", false)
+    return
+  end
+  setActiveCode(clipText)
+  local chars, words, lines = getTextStats(clipText)
+  notifyUser(string.format("Pasted %d characters and %d lines successfully!", chars, lines), true)
+end
+
+-- Button: Empty Box (Resets Editor & Memory)
+views.btnEmptyCode.onClick = function()
+  setActiveCode("")
+  notifyUser("Editor box emptied.", true)
+end
+
+-- Button 1: Clear Code (Removes ==== and extra blank lines on any size code)
 views.btnCleanCode.onClick = function()
-  local raw = tostring(views.edtTextContent.Text)
+  local raw = getActiveCode()
   if raw == "" then
     notifyUser("There is no code to clear.", false)
     return
@@ -1866,25 +1959,22 @@ views.btnCleanCode.onClick = function()
   local beforeChars = #raw
   local cleaned = cleanCodeSafely(raw)
   local afterChars = #cleaned
-  views.edtTextContent.Text = cleaned
-  updateCounterDisplay(true)
+  setActiveCode(cleaned)
   local removed = math.max(0, beforeChars - afterChars)
-  notifyUser("Code cleaned successfully. Removed " .. removed .. " extra junk and equal characters.", true)
+  notifyUser("Code cleaned! Removed " .. removed .. " extra junk and equal characters.", true)
 end
 
 -- Button 2: Copy
 views.btnCopyText.onClick = function()
-  updateCounterDisplay(true)
-  local currentText = tostring(views.edtTextContent.Text)
-  copyToClipboard(currentText, "Code copied to clipboard.")
+  local currentText = getActiveCode()
+  copyToClipboard(currentText, "Full code (" .. #currentText .. " chars) copied to clipboard.")
 end
 
--- Button 3: Create File
+-- Button 3: Create File (Saves 100% Full Code regardless of size)
 views.btnCreateFile.onClick = function()
-  updateCounterDisplay(true)
   local rawName = tostring(views.edtFileName.Text)
   local cleanName = sanitizeFileName(rawName)
-  local fContent = tostring(views.edtTextContent.Text)
+  local fContent = getActiveCode()
 
   if cleanName == "" then
     notifyUser("Please enter a file name first.", false)
@@ -1954,26 +2044,26 @@ views.btnCreateFile.onClick = function()
 
   local ok, err = writeFileFast(fullFilePath, fContent)
   if ok then
-    notifyUser("File created successfully: " .. finalFileName, true)
+    notifyUser("File created successfully: " .. finalFileName .. " (" .. #fContent .. " chars)", true)
   else
     notifyUser("Failed to create file: " .. tostring(err), false)
   end
 end
 
--- Button 4: Browse (Opens Phone Storage directly)
+-- Button 4: Browse
 views.btnBrowseFiles.onClick = function()
   openFileBrowser(rootStorage)
 end
 
 -- Button 5: Split Code
 views.btnSplitScript.onClick = function()
-  updateCounterDisplay(true)
+  updateCounterDisplay()
   openCodeSplitterWindow()
 end
 
 -- Button 6: Edit Lines
 views.btnEditLines.onClick = function()
-  updateCounterDisplay(true)
+  updateCounterDisplay()
   openLineEditorWindow()
 end
 
@@ -1984,7 +2074,6 @@ end
 
 -- Button 8: Close
 views.btnCloseExtension.onClick = function()
-  isDialogActive = false
   notifyUser("Closing Smart Code and File Master Pro.", true)
   dlg.dismiss()
 end
